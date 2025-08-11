@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: gemma-chatbot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+    healthCheckPath: /health
+    autoDeploy: false
