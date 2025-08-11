@@ -358,7 +358,7 @@ def chat():
         
         # Prepare the request to Ollama
         ollama_payload = {
-            "model": "gemma3:1b-it-qat",
+            "model": "qwen:0.5b",
             "prompt": full_prompt,
             "stream": False,
             "options": {
