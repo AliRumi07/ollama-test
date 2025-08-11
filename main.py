@@ -41,143 +41,176 @@ HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>EMAM AI - Islamic Q&A Assistant</title>
+    <title>EMAM AI</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f0f0f0;
-        }
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-        }
-        .subtitle {
-            text-align: center;
-            color: #7f8c8d;
-            margin-bottom: 20px;
-        }
-        .chat-container {
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            padding: 20px;
-            height: 500px;
+            background-color: #f5f5f5;
+            height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        .chat-messages {
+        
+        .header {
+            background-color: #333;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: normal;
+        }
+        
+        .clear-button {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 5px 15px;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .clear-button:hover {
+            background-color: #777;
+        }
+        
+        #status {
+            background-color: #e0e0e0;
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            background-color: white;
+        }
+        
+        .messages {
             flex: 1;
             overflow-y: auto;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            margin-bottom: 10px;
+            padding: 20px;
         }
+        
         .message {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            max-width: 70%;
         }
+        
         .user-message {
-            background-color: #27ae60;
-            color: white;
+            background-color: #e3f2fd;
+            margin-left: auto;
             text-align: right;
-            margin-left: 20%;
         }
+        
         .bot-message {
-            background-color: #ecf0f1;
-            color: #2c3e50;
-            margin-right: 20%;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
         }
-        .input-container {
+        
+        .input-area {
+            border-top: 1px solid #ddd;
+            padding: 15px;
             display: flex;
             gap: 10px;
         }
+        
         #user-input {
             flex: 1;
             padding: 10px;
             border: 1px solid #ddd;
-            border-radius: 5px;
+            border-radius: 4px;
             font-size: 16px;
         }
+        
         #send-button {
             padding: 10px 20px;
-            background-color: #27ae60;
+            background-color: #333;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
         }
-        #send-button:hover {
-            background-color: #229954;
+        
+        #send-button:hover:not(:disabled) {
+            background-color: #555;
         }
+        
         #send-button:disabled {
-            background-color: #ccc;
+            background-color: #999;
             cursor: not-allowed;
         }
+        
         .loading {
             text-align: center;
             color: #666;
-            font-style: italic;
-        }
-        .status {
-            text-align: center;
             padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
         }
-        .status.ready {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .status.loading {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-        .status.error {
-            background-color: #f8d7da;
-            color: #721c24;
+        
+        .context-indicator {
+            font-size: 12px;
+            color: #666;
+            padding: 5px 10px;
+            text-align: center;
+            font-style: italic;
         }
     </style>
 </head>
 <body>
-    <h1>EMAM AI</h1>
-    <p class="subtitle">Islamic Q&A Assistant based on Engr. Muhammad Ali Mirza's teachings</p>
-    <div id="status" class="status loading">Initializing Ollama...</div>
+    <div class="header">
+        <h1>EMAM AI</h1>
+        <button class="clear-button" onclick="clearHistory()">Clear History</button>
+    </div>
+    
+    <div id="status">Initializing...</div>
+    
     <div class="chat-container">
-        <div class="chat-messages" id="chat-messages"></div>
-        <div class="input-container">
-            <input type="text" id="user-input" placeholder="Ask your Islamic question..." autofocus disabled>
+        <div class="messages" id="messages"></div>
+        <div id="context-indicator" class="context-indicator" style="display: none;">
+            Conversation context is being maintained
+        </div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Type your message..." disabled>
             <button id="send-button" onclick="sendMessage()" disabled>Send</button>
         </div>
     </div>
 
     <script>
         let ollamaReady = false;
-        let isFirstMessage = true;
 
-        function updateStatus(message, type) {
+        function updateStatus(message) {
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
-            statusDiv.className = 'status ' + type;
             
-            if (type === 'ready') {
+            if (message === 'Ready') {
+                statusDiv.style.backgroundColor = '#c8e6c9';
                 document.getElementById('user-input').disabled = false;
                 document.getElementById('send-button').disabled = false;
                 ollamaReady = true;
-                
-                // Show initial greeting when ready
-                if (isFirstMessage) {
-                    setTimeout(() => {
-                        addMessage("Peace and blessings of Allah be upon you. I am EMAM AI. I assist with Q&A covered by Engr. Muhammad Ali Mirza.", false);
-                        isFirstMessage = false;
-                    }, 500);
-                }
+                checkContextIndicator();
             }
         }
 
@@ -186,38 +219,38 @@ HTML_TEMPLATE = '''
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'ready') {
-                        updateStatus('System Ready', 'ready');
+                        updateStatus('Ready');
                     } else if (data.status === 'loading') {
-                        updateStatus(data.message, 'loading');
+                        updateStatus(data.message);
                         setTimeout(checkOllamaStatus, 2000);
                     } else {
-                        updateStatus(data.message, 'error');
+                        updateStatus('Error: ' + data.message);
                         setTimeout(checkOllamaStatus, 5000);
                     }
                 })
                 .catch(error => {
-                    updateStatus('Error checking Ollama status', 'error');
+                    updateStatus('Connection error');
                     setTimeout(checkOllamaStatus, 5000);
                 });
         }
 
         function addMessage(message, isUser) {
-            const chatMessages = document.getElementById('chat-messages');
+            const messagesDiv = document.getElementById('messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + (isUser ? 'user-message' : 'bot-message');
             messageDiv.textContent = message;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         function showLoading() {
-            const chatMessages = document.getElementById('chat-messages');
+            const messagesDiv = document.getElementById('messages');
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'loading';
             loadingDiv.id = 'loading';
-            loadingDiv.textContent = 'Thinking...';
-            chatMessages.appendChild(loadingDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            loadingDiv.textContent = '...';
+            messagesDiv.appendChild(loadingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         function hideLoading() {
@@ -227,11 +260,21 @@ HTML_TEMPLATE = '''
             }
         }
 
+        function checkContextIndicator() {
+            fetch('/has-context')
+                .then(response => response.json())
+                .then(data => {
+                    const indicator = document.getElementById('context-indicator');
+                    if (data.has_context) {
+                        indicator.style.display = 'block';
+                    } else {
+                        indicator.style.display = 'none';
+                    }
+                });
+        }
+
         async function sendMessage() {
-            if (!ollamaReady) {
-                alert('System is not ready yet. Please wait...');
-                return;
-            }
+            if (!ollamaReady) return;
 
             const userInput = document.getElementById('user-input');
             const sendButton = document.getElementById('send-button');
@@ -239,14 +282,9 @@ HTML_TEMPLATE = '''
             
             if (!message) return;
             
-            // Add user message to chat
             addMessage(message, true);
-            
-            // Clear input and disable button
             userInput.value = '';
             sendButton.disabled = true;
-            
-            // Show loading indicator
             showLoading();
             
             try {
@@ -259,28 +297,35 @@ HTML_TEMPLATE = '''
                 });
                 
                 const data = await response.json();
-                
-                // Hide loading and add bot response
                 hideLoading();
                 addMessage(data.response, false);
+                checkContextIndicator();
                 
             } catch (error) {
                 hideLoading();
-                addMessage('Error: Unable to get response. Please try again.', false);
+                addMessage('Error: Unable to get response.', false);
             } finally {
                 sendButton.disabled = false;
                 userInput.focus();
             }
         }
 
-        // Allow sending message with Enter key
+        function clearHistory() {
+            if (confirm('Are you sure you want to clear the conversation history?')) {
+                fetch('/clear-history', { method: 'POST' })
+                    .then(() => {
+                        document.getElementById('messages').innerHTML = '';
+                        checkContextIndicator();
+                    });
+            }
+        }
+
         document.getElementById('user-input').addEventListener('keypress', function(event) {
-            if (event.key === 'Enter' && !document.getElementById('send-button').disabled && ollamaReady) {
+            if (event.key === 'Enter' && !document.getElementById('send-button').disabled) {
                 sendMessage();
             }
         });
 
-        // Check Ollama status on page load
         window.onload = function() {
             checkOllamaStatus();
         };
@@ -339,26 +384,50 @@ def start_ollama():
 
 @app.route('/')
 def index():
-    # Initialize session for first message tracking
-    if 'first_message_shown' not in session:
-        session['first_message_shown'] = False
+    # Initialize session conversation history
+    if 'conversation_history' not in session:
+        session['conversation_history'] = []
     return render_template_string(HTML_TEMPLATE)
 
 @app.route('/ollama-status')
 def get_ollama_status():
     return jsonify(ollama_status)
 
+@app.route('/has-context')
+def has_context():
+    """Check if there's conversation history"""
+    has_history = len(session.get('conversation_history', [])) > 0
+    return jsonify({'has_context': has_history})
+
+@app.route('/clear-history', methods=['POST'])
+def clear_history():
+    """Clear conversation history"""
+    session['conversation_history'] = []
+    return jsonify({'status': 'cleared'})
+
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
         user_message = request.json.get('message', '')
         
-        # Combine system prompt with user message
-        full_prompt = f"{SYSTEM_PROMPT}\n\nUser: {user_message}\nAssistant:"
+        # Get conversation history from session
+        conversation_history = session.get('conversation_history', [])
+        
+        # Build conversation context
+        context = ""
+        if conversation_history:
+            context = "\n\nPrevious conversation:\n"
+            # Include last 3 exchanges (6 messages) for context
+            recent_history = conversation_history[-6:]
+            for msg in recent_history:
+                context += f"{msg['role']}: {msg['content']}\n"
+        
+        # Combine system prompt with conversation history and current message
+        full_prompt = f"{SYSTEM_PROMPT}{context}\n\nUser: {user_message}\nAssistant:"
         
         # Prepare the request to Ollama
         ollama_payload = {
-            "model": "qwen:0.5b",
+            "model": "gemma3:1b-it-qat",
             "prompt": full_prompt,
             "stream": False,
             "options": {
@@ -380,6 +449,18 @@ def chat():
         bot_response = bot_response.strip()
         if bot_response.startswith("Assistant:"):
             bot_response = bot_response[10:].strip()
+        
+        # Update conversation history
+        conversation_history.append({'role': 'User', 'content': user_message})
+        conversation_history.append({'role': 'Assistant', 'content': bot_response})
+        
+        # Keep only last 10 exchanges (20 messages) to prevent context from growing too large
+        if len(conversation_history) > 20:
+            conversation_history = conversation_history[-20:]
+        
+        # Save updated history to session
+        session['conversation_history'] = conversation_history
+        session.modified = True
         
         return jsonify({'response': bot_response})
         
