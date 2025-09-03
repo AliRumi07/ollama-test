@@ -11,7 +11,7 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # For session management
 
 # Configuration - Change model name here
-MODEL_NAME = "llama2:70b"  # Change this to use a different model
+MODEL_NAME = "deepseek-r1:671b"  # Change this to use a different model
 
 # Ollama API endpoint
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
