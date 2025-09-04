@@ -11,10 +11,28 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # For session management
 
 # Configuration - Change model name here
-MODEL_NAME = "deepseek-r1:32b"  # Change this to use a different model
+MODEL_NAME = "deepseek-r1:14b"  # Change this to use a different model
 
 # Ollama API endpoint
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
+
+# System prompt file
+SYSTEM_PROMPT_FILE = "system_prompt.txt"
+
+def load_system_prompt():
+    """Load system prompt from file"""
+    try:
+        with open(SYSTEM_PROMPT_FILE, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        app.logger.warning(f"System prompt file {SYSTEM_PROMPT_FILE} not found. Using default prompt.")
+        return "You are a helpful AI assistant."
+    except Exception as e:
+        app.logger.error(f"Error loading system prompt: {str(e)}")
+        return "You are a helpful AI assistant."
+
+# Load system prompt at startup
+SYSTEM_PROMPT = load_system_prompt()
 
 # HTML template for the chat interface
 HTML_TEMPLATE = '''
@@ -402,16 +420,17 @@ def chat():
         # Get conversation history from session
         conversation_history = session.get('conversation_history', [])
         
-        # Build conversation context
-        full_prompt = ""
+        # Build conversation context with system prompt
         if conversation_history:
-            # Include last 3 exchanges (6 messages) for context
+            # Include system prompt and last 3 exchanges (6 messages) for context
+            full_prompt = f"System: {SYSTEM_PROMPT}\n\n"
             recent_history = conversation_history[-6:]
             for msg in recent_history:
                 full_prompt += f"{msg['role']}: {msg['content']}\n"
             full_prompt += f"User: {user_message}\nAssistant:"
         else:
-            full_prompt = user_message
+            # First message - include system prompt
+            full_prompt = f"System: {SYSTEM_PROMPT}\n\nUser: {user_message}\nAssistant:"
         
         # Prepare the request to Ollama
         ollama_payload = {
