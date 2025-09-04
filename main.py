@@ -17,15 +17,22 @@ MODEL_NAME = "llama3.2:3b"  # Change this to use a different model
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 
 # Load system prompt from file
-SYSTEM_PROMPT = ""
-try:
-    with open('system_prompt.txt', 'r', encoding='utf-8') as f:
-        SYSTEM_PROMPT = f.read().strip()
-    app.logger.info(f"Loaded system prompt from system_prompt.txt")
-except FileNotFoundError:
-    app.logger.warning("system_prompt.txt not found. Using no system prompt.")
-except Exception as e:
-    app.logger.error(f"Error reading system_prompt.txt: {str(e)}")
+def load_system_prompt():
+    """Load system prompt from file"""
+    try:
+        with open('system_prompt.txt', 'r', encoding='utf-8') as f:
+            prompt = f.read().strip()
+            app.logger.info(f"Loaded system prompt from system_prompt.txt")
+            return prompt
+    except FileNotFoundError:
+        app.logger.warning("system_prompt.txt not found. Using no system prompt.")
+        return ""
+    except Exception as e:
+        app.logger.error(f"Error reading system_prompt.txt: {str(e)}")
+        return ""
+
+# Load system prompt at startup
+SYSTEM_PROMPT = load_system_prompt()
 
 # HTML template for the chat interface
 HTML_TEMPLATE = '''
@@ -340,18 +347,6 @@ ollama_status = {
     'message': 'Starting Ollama...'
 }
 
-def reload_system_prompt():
-    """Reload the system prompt from file"""
-    global SYSTEM_PROMPT
-    try:
-        with open('system_prompt.txt', 'r', encoding='utf-8') as f:
-            SYSTEM_PROMPT = f.read().strip()
-            app.logger.info("Reloaded system prompt from file")
-            return True
-    except Exception as e:
-        app.logger.error(f"Error reloading system prompt: {str(e)}")
-        return False
-
 def start_ollama():
     """Start Ollama service in the background"""
     global ollama_status
@@ -399,6 +394,9 @@ def index():
     # Initialize session conversation history
     if 'conversation_history' not in session:
         session['conversation_history'] = []
+    # Reload system prompt on page load
+    global SYSTEM_PROMPT
+    SYSTEM_PROMPT = load_system_prompt()
     return render_template_string(HTML_TEMPLATE)
 
 @app.route('/ollama-status')
@@ -425,21 +423,26 @@ def chat():
         # Get conversation history from session
         conversation_history = session.get('conversation_history', [])
         
-        # Build conversation context
+        # Build prompt with system prompt always first
         full_prompt = ""
         
-        # Include system prompt if it exists
+        # Always start with system prompt if it exists
         if SYSTEM_PROMPT:
-            full_prompt = f"System: {SYSTEM_PROMPT}\n\n"
+            full_prompt = f"{SYSTEM_PROMPT}\n\n"
         
+        # Add conversation history
         if conversation_history:
             # Include last 3 exchanges (6 messages) for context
             recent_history = conversation_history[-6:]
             for msg in recent_history:
-                full_prompt += f"{msg['role']}: {msg['content']}\n"
-            full_prompt += f"User: {user_message}\nAssistant:"
-        else:
-            full_prompt += f"User: {user_message}\nAssistant:"
+                if msg['role'] == 'User':
+                    full_prompt += f"User: {msg['content']}\n"
+                else:
+                    full_prompt += f"Assistant: {msg['content']}\n"
+        
+        # Add current user message
+        full_prompt += f"User: {user_message}\n"
+        full_prompt += "Assistant: "
         
         # Prepare the request to Ollama
         ollama_payload = {
@@ -449,28 +452,31 @@ def chat():
             "options": {
                 "temperature": 0.7,
                 "top_p": 0.9,
-                "top_k": 40
+                "top_k": 40,
+                "num_predict": 2048
             }
         }
         
         # Make request to Ollama
-        response = requests.post(OLLAMA_API_URL, json=ollama_payload, timeout=30)
+        response = requests.post(OLLAMA_API_URL, json=ollama_payload, timeout=60)
         response.raise_for_status()
         
         # Extract the response text
         ollama_response = response.json()
         bot_response = ollama_response.get('response', 'Sorry, I could not generate a response.')
         
-        # Clean up the response (remove any "Assistant:" prefix if present)
+        # Clean up the response
         bot_response = bot_response.strip()
-        if bot_response.startswith("Assistant:"):
-            bot_response = bot_response[10:].strip()
+        # Remove any prefixes that might have been generated
+        for prefix in ["Assistant:", "AI:", "Bot:"]:
+            if bot_response.startswith(prefix):
+                bot_response = bot_response[len(prefix):].strip()
         
         # Update conversation history
         conversation_history.append({'role': 'User', 'content': user_message})
         conversation_history.append({'role': 'Assistant', 'content': bot_response})
         
-        # Keep only last 10 exchanges (20 messages) to prevent context from growing too large
+        # Keep only last 10 exchanges (20 messages)
         if len(conversation_history) > 20:
             conversation_history = conversation_history[-20:]
         
@@ -493,10 +499,9 @@ def chat():
 @app.route('/reload-prompt', methods=['POST'])
 def reload_prompt():
     """Endpoint to reload the system prompt"""
-    if reload_system_prompt():
-        return jsonify({'status': 'success', 'message': 'System prompt reloaded'})
-    else:
-        return jsonify({'status': 'error', 'message': 'Failed to reload system prompt'}), 500
+    global SYSTEM_PROMPT
+    SYSTEM_PROMPT = load_system_prompt()
+    return jsonify({'status': 'success', 'message': 'System prompt reloaded', 'prompt': SYSTEM_PROMPT})
 
 @app.route('/health')
 def health():
