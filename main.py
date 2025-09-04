@@ -16,25 +16,44 @@ MODEL_NAME = "llama3.2:3b"  # Change this to use a different model
 # Ollama API endpoint - Using CHAT endpoint for system prompt support
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SYSTEM_PROMPT_FILE = os.path.join(SCRIPT_DIR, 'system_prompt.txt')
+
 # Load system prompt from file
 def load_system_prompt():
     """Load system prompt from file"""
     try:
-        with open('system_prompt.txt', 'r', encoding='utf-8') as f:
+        # Use absolute path to ensure we're reading from the right location
+        with open(SYSTEM_PROMPT_FILE, 'r', encoding='utf-8') as f:
             prompt = f.read().strip()
-            app.logger.info(f"Loaded system prompt: {prompt[:50]}...")  # Log first 50 chars
-            return prompt
+            if prompt:  # Only use if file has content
+                app.logger.info(f"Successfully loaded system prompt from {SYSTEM_PROMPT_FILE}")
+                app.logger.info(f"System prompt content: {prompt[:100]}...")  # Log first 100 chars
+                return prompt
+            else:
+                app.logger.warning(f"system_prompt.txt is empty at {SYSTEM_PROMPT_FILE}")
+                return "You are a helpful AI assistant."
     except FileNotFoundError:
-        app.logger.warning("system_prompt.txt not found. Using default system prompt.")
+        app.logger.warning(f"system_prompt.txt not found at {SYSTEM_PROMPT_FILE}")
+        app.logger.info(f"Current working directory: {os.getcwd()}")
+        app.logger.info(f"Script directory: {SCRIPT_DIR}")
+        # List files in script directory for debugging
+        try:
+            files = os.listdir(SCRIPT_DIR)
+            app.logger.info(f"Files in script directory: {files}")
+        except:
+            pass
         return "You are a helpful AI assistant."
     except Exception as e:
         app.logger.error(f"Error reading system_prompt.txt: {str(e)}")
+        app.logger.error(f"File path attempted: {SYSTEM_PROMPT_FILE}")
         return "You are a helpful AI assistant."
 
 # Load system prompt at startup
 SYSTEM_PROMPT = load_system_prompt()
 
-# HTML template for the chat interface
+# HTML template for the chat interface (keeping same as before)
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -236,8 +255,10 @@ HTML_TEMPLATE = '''
                     const promptStatus = document.getElementById('system-prompt-status');
                     if (data.has_prompt) {
                         promptStatus.textContent = `System prompt: Loaded (${data.length} chars)`;
+                        promptStatus.style.color = '#4CAF50';
                     } else {
                         promptStatus.textContent = 'System prompt: Using default';
+                        promptStatus.style.color = '#FF9800';
                     }
                 });
         }
@@ -430,7 +451,8 @@ def system_prompt_status():
     has_prompt = bool(SYSTEM_PROMPT and SYSTEM_PROMPT != "You are a helpful AI assistant.")
     return jsonify({
         'has_prompt': has_prompt,
-        'length': len(SYSTEM_PROMPT) if SYSTEM_PROMPT else 0
+        'length': len(SYSTEM_PROMPT) if SYSTEM_PROMPT else 0,
+        'prompt_preview': SYSTEM_PROMPT[:50] if SYSTEM_PROMPT else "No prompt"
     })
 
 @app.route('/has-context')
@@ -462,6 +484,9 @@ def chat():
             "content": SYSTEM_PROMPT
         })
         
+        # Log for debugging
+        app.logger.info(f"Using system prompt: {SYSTEM_PROMPT[:100]}...")
+        
         # Add conversation history (last 6 messages = 3 exchanges)
         if conversation_history:
             for msg in conversation_history[-6:]:
@@ -475,10 +500,6 @@ def chat():
             "role": "user",
             "content": user_message
         })
-        
-        # Log the messages being sent (for debugging)
-        app.logger.info(f"Sending {len(messages)} messages to Ollama")
-        app.logger.info(f"System prompt: {SYSTEM_PROMPT[:50]}...")
         
         # Prepare the request to Ollama using chat endpoint
         ollama_payload = {
@@ -521,7 +542,8 @@ def chat():
         return jsonify({'response': 'The request timed out. Please try again.'}), 500
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Ollama API error: {str(e)}")
-        app.logger.error(f"Response content: {e.response.text if hasattr(e, 'response') else 'No response'}")
+        if hasattr(e, 'response') and e.response:
+            app.logger.error(f"Response content: {e.response.text}")
         return jsonify({'response': 'Error: Could not connect to Ollama. Please refresh the page.'}), 500
     except Exception as e:
         app.logger.error(f"Unexpected error: {str(e)}")
@@ -535,7 +557,8 @@ def reload_prompt():
     return jsonify({
         'status': 'success',
         'message': 'System prompt reloaded',
-        'prompt_length': len(SYSTEM_PROMPT)
+        'prompt_length': len(SYSTEM_PROMPT),
+        'file_path': SYSTEM_PROMPT_FILE
     })
 
 @app.route('/health')
@@ -552,7 +575,14 @@ if __name__ == '__main__':
     # Get port from environment variable (Render sets this)
     port = int(os.environ.get('PORT', 8080))
     
-    # Run the Flask app with logging
+    # Enable logging to see debug information
     import logging
     logging.basicConfig(level=logging.INFO)
+    
+    # Print important paths for debugging
+    print(f"Script directory: {SCRIPT_DIR}")
+    print(f"Looking for system prompt at: {SYSTEM_PROMPT_FILE}")
+    print(f"Current working directory: {os.getcwd()}")
+    
+    # Run the Flask app
     app.run(host='0.0.0.0', port=port, debug=False)
