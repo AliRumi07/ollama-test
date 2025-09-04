@@ -473,9 +473,9 @@ def chat():
             "model": MODEL_NAME,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": 0.7, "top_p": 0.9, "top_k": 40}
+            "options": {"temperature": 0, "top_p": 1, "top_k": 0}
         }
-        r = requests.post(OLLAMA_API_URL, json=payload, timeout=30)
+        r = requests.post(OLLAMA_API_URL, json=payload, timeout=90)
         r.raise_for_status()
         bot = r.json().get('response', '').strip()
         if bot.lower().startswith("assistant:"):
