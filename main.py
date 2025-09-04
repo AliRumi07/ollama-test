@@ -17,7 +17,7 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)        # for session management
 
 # ─── Configuration ────────────────────────────────────────────────────
-MODEL_NAME = "llama3.1:8b"                # change if you use another model
+MODEL_NAME = "llama3.1:70b"                # change if you use another model
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 
 # Hard-coded system prompt (edit freely)
@@ -473,7 +473,7 @@ def chat():
             "model": MODEL_NAME,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": 0, "top_p": 1, "top_k": 0}
+            "options": {"temperature": 0, "top_p": 1, "top_k": 40}
         }
         r = requests.post(OLLAMA_API_URL, json=payload, timeout=90)
         r.raise_for_status()
