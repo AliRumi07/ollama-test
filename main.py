@@ -12,7 +12,7 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # For session management
 
 # ─── Configuration ─────────────────────────────────────────────────────────────────────
-MODEL_NAME = "deepseek-r1:14b"  # Change this to use a different model
+MODEL_NAME = "deepseek-r1:1.5b"  # Change this to use a different model
 
 # Path of the file that holds the system prompt
 SYSTEM_PROMPT_FILE = Path("system_prompt.txt")
